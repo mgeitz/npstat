@@ -1,10 +1,30 @@
 #! /usr/bin/env python
 
 """
-NPStat
+   Program:             NPStat
+   File Name:           npstat.py
 
-NCurses Neopixel Status Indicator
+   Copyright (C) 2018 Michael Geitz
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 """
+
+"""
+   NPStat - NCurses Neopixel Status Indicator
+"""
+
 
 import sys
 import os
@@ -17,20 +37,21 @@ import threading
 import Queue
 import curses
 
-import lib.npstat_settings as settings
-import lib.npstat_process as npsprocess
-import lib.npstat_lights as npslights
-import lib.npstat_curses as npscurses
-import lib.npstat_events as npsevents
-
 try:
   from neopixel import Color
 except RuntimeError:
   print('Error importing RPi.GPIO! \
          Unfortunately this must be run as root')
 
+import lib.npstat_settings as settings
+import lib.npstat_process as npsprocess
+import lib.npstat_lights as npslights
+import lib.npstat_curses as npscurses
+import lib.npstat_events as npsevents
+
+
 __author__ = 'Michael Geitz'
-__version__ = '0.0.2'
+__version__ = '0.1.0'
 
 
 def initialize():
@@ -44,7 +65,7 @@ def np_stat(screen, lights, brightness):
   """Test a small neopixel ring"""
   try:
     # Default light sequence
-    light_sequence = npslights.statusWipes
+    light_sequence = npslights.status_indicator
 
     # Keys which trigger color changes
     light_keys = [curses.KEY_F1, curses.KEY_F2,
@@ -75,10 +96,15 @@ def np_stat(screen, lights, brightness):
     event_input.daemon = True
     event_input.start()
 
+    help_toggle = False
     active_pids = []
     npscurses.redraw_all(screen)
     key = ''
     while key != ord('q') and key != 27:
+      # Redraw on any update
+      if not event_queue.empty() or not key_queue.empty():
+        if not help_toggle:
+          npscurses.redraw_all(screen)
       # Process Events
       active_pids = npsprocess.consume_event(event_queue, light_queue, active_pids)
       # Process Keys
@@ -87,8 +113,8 @@ def np_stat(screen, lights, brightness):
         key_queue.task_done()
       # F2: Set Lights Profile to Status Wipe
       if key == curses.KEY_F2:
-        settings.log('Light Profile: Status Wipe')
-        light_sequence=npslights.statusWipes
+        settings.log('Light Profile: Status Indicator - wipe')
+        light_sequence=npslights.status_indicator
         npscurses.redraw_all(screen)
       # PgUp: Increase Brightness
       elif key == curses.KEY_PPAGE:
@@ -105,8 +131,11 @@ def np_stat(screen, lights, brightness):
         npscurses.redraw_all(screen)
       # F12: Display Help
       elif key == curses.KEY_F12:
-        npscurses.help_menu(screen)
-        npscurses.redraw_all(screen)
+        if help_toggle:
+          help_toggle = False
+        else:
+          help_toggle = True
+          npscurses.draw_help_menu(screen)
       # Check for Light Profile Change
       if light_control.is_alive() and key in light_keys:
         light_flag.set()
@@ -116,7 +145,7 @@ def np_stat(screen, lights, brightness):
                 args = (event_queue, lights, light_flag))
         light_control.daemon = True
         light_control.start()
-      time.sleep(0.01)
+      time.sleep(0.025)
   except Exception as e:
     settings.log(e)
   if light_control.is_alive():
@@ -133,10 +162,14 @@ def np_stat(screen, lights, brightness):
 def main(argv):
   """Main method"""
 
+  # Initialize
+  initialize()
+  screen = npscurses.initialize_screen()
+
   # Handle Arguements
-  input_pin = 0
-  brightness = 0
-  led_count = 0
+  input_pin = settings.config['lights']['input_pin']
+  brightness = settings.config['lights']['brightness']
+  led_count = settings.config['lights']['count']
 
   try:
     opts, args = getopt.getopt(sys.argv[1:], 'hi:b:l:',
@@ -160,18 +193,14 @@ def main(argv):
   if not input_pin or not brightness or not led_count:
     settings.usage()
 
-  # Initialize
-  initialize()
-  screen = npscurses.initialize_screen()
-  color_ring = npslights.initialize(led_count, input_pin, brightness)
-
   # Main show
-  np_stat(screen, color_ring, brightness)
+  neopixel_lights = npslights.initialize(led_count, input_pin, brightness)
+  np_stat(screen, neopixel_lights, brightness)
 
   # Cleanup
   settings.log('Exiting')
   npscurses.redraw_all(screen)
-  time.sleep(1)
+  time.sleep(0.2)
   npscurses.close_screens(screen)
 
 

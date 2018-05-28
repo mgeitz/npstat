@@ -1,15 +1,35 @@
 #! /usr/bin/env python
 
 """
-Light Queue Consume for NPStat
+   Program:             NPStat
+   File Name:           npstat_lights.py
+
+   Copyright (C) 2018 Michael Geitz
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 """
+
+"""
+   NPStat Light Queue Consume
+"""
+
 
 import time
 import random
 import Queue
 import os
-
-import npstat_settings as settings
 
 try:
   from neopixel import *
@@ -17,17 +37,20 @@ except RuntimeError:
   print('Error importing RPi.GPIO! \
          Unfortunately this must be run as root')
 
-LED_FREQ_HZ    = 800000  # LED signal frequency in hertz (usually 800khz)
-LED_DMA        = 5       # DMA channel to use for generating signal (try 5)
-LED_INVERT     = False   # True to invert the signal (when using NPN transistor level shift)
+import npstat_settings as settings
 
 
 def initialize(led_count, input_pin, brightness):
-  return Adafruit_NeoPixel(led_count, input_pin, LED_FREQ_HZ, LED_DMA, LED_INVERT, brightness)
+  """Initialize Neopixels"""
+  return Adafruit_NeoPixel(led_count, input_pin,
+          settings.config['lights']['led_freq_hz'],
+          settings.config['lights']['led_dma'],
+          settings.config['lights']['led_invert'],
+          brightness)
 
 
-def colorWipe(light_flag, lights, color, wait_ms=50):
-  """Wipe color across display a pixel at a time."""
+def status_wipe(light_flag, lights, color, wait_ms=50):
+  """Wipe color across pixels"""
   for i in range(lights.numPixels()):
     if light_flag.is_set():
       break
@@ -36,29 +59,39 @@ def colorWipe(light_flag, lights, color, wait_ms=50):
     time.sleep(wait_ms/1000.0)
 
 
-def statusWipes(light_queue, event_queue, lights, light_flag):
+def status_indicator(light_queue, event_queue, lights, light_flag):
   """Run wipe of current event"""
   while(not light_flag.is_set()):
     # Run noise if no status
-    if light_queue.empty():
-      rainbowCycle(lights, light_flag)
-    # Run status color
-    else:
-      status = light_queue.get()
-      colorWipe(light_flag, lights, Color(255, 255, 255))   # White wipe
-      colorWipe(light_flag, lights,
-        Color(status.color[0], status.color[1], status.color[2]))
-      colorWipe(light_flag, lights, Color(255, 255, 255))   # White wipe
-      light_queue.task_done()
-      # Decrement TTL and Resubmit to self
-      if status.ttl > 1:
-        status.ttl = status.ttl - 1
-        light_queue.put(status)
-      # Signal Event Removal
+    try:
+      if light_queue.empty():
+        status_idle(lights, light_flag, light_queue)
+     # Run status color
       else:
-        ttl_event = settings.event('ttl', status.pid, [75, 75, 75], 1)
-        event_queue.put(ttl_event)
-
+        status = light_queue.get()
+        settings.log('light > consume :: ' + status.type + ' [' + str(status.pid) + '] :: indicator output (' + str(status.color) + ')')
+        status_wipe(light_flag, lights, Color(settings.config['colors']['white'][0],
+                                              settings.config['colors']['white'][1],
+                                              settings.config['colors']['white'][2]))
+        status_wipe(light_flag, lights, Color(status.color[0], status.color[1], status.color[2]))
+        status_wipe(light_flag, lights, Color(settings.config['colors']['white'][0],
+                                              settings.config['colors']['white'][1],
+                                              settings.config['colors']['white'][2]))
+        light_queue.task_done()
+        # Persist 0 ttl
+        if status.ttl <= 0:
+          light_queue.put(status)
+        # Decrement TTL and Resubmit to self
+        elif status.ttl > 1:
+          resubmit_event = settings.event(status.type, status.pid, status.color, (status.ttl - 1))
+          light_queue.put(resubmit_event)
+        # Signal Event Removal
+        else:
+          settings.log('light > event :: ' + status.type + ' [' + str(status.pid)  + '] :: ttl expire')
+          ttl_event = settings.event('ttl', status.pid, settings.config['colors']['yellow'], 1)
+          event_queue.put(ttl_event)
+    except Exception as e:
+      settings.log(e)
 
 def turn_off(lights):
   """Turn off all lights (before a clean exit)"""
@@ -68,7 +101,7 @@ def turn_off(lights):
 
 
 def wheel(pos):
-  """Generate rainbow colors across 0-255 positions."""
+  """Generate rainbow colors across 0-255 positions"""
   if pos < 85:
     return Color(pos * 3, 255 - pos * 3, 0)
   elif pos < 170:
@@ -93,23 +126,12 @@ def breath(lights, light_flag, wait_ms=20, iterations=1):
       time.sleep(wait_ms/1000.0)
 
 
-def rainbow(lights, light_flag, wait_ms=20, iterations=1):
-  """Draw rainbow that fades across all pixels at once."""
-  for j in range(256 * iterations):
-    if light_flag.is_set():
+def status_idle(lights, light_flag, light_queue, wait_ms=20, iterations=1):
+  """Draw rainbow that uniformly distributes itself across all pixels"""
+  for each_color in range(256 * iterations):
+    if light_flag.is_set() or not light_queue.empty():
       break
-    for i in range(lights.numPixels()):
-      lights.setPixelColor(i, wheel((i + j) & 255))
+    for light in range(lights.numPixels()):
+      lights.setPixelColor(light, wheel(((light * 256 / lights.numPixels()) + each_color) & 255))
       lights.show()
       time.sleep(wait_ms/1000.0)
-
-
-def rainbowCycle(lights, light_flag, wait_ms=20, iterations=1):
-  """Draw rainbow that uniformly distributes itself across all pixels."""
-  for j in range(256 * iterations):
-    if light_flag.is_set():
-      break
-  for i in range(lights.numPixels()):
-    lights.setPixelColor(i, wheel(((i * 256 / lights.numPixels()) + j) & 255))
-    lights.show()
-    time.sleep(wait_ms/1000.0)

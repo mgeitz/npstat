@@ -32,32 +32,39 @@ $ sudo python setup.py install
 #### Clone NPStat
 
 ```sh
-$ git clone https://github.com/mgeitz/npstat.git
+$ git clone https://github.com/mgeitz/npstat.git $HOME/.npstat
 ```
 
 #### Run NPStat
 
 NPStat must be run as `root`
 ```sh
-$ sudo python npstat  -i [input_pin] -b [brightness 1-255] -l [led_count]
+$ sudo python npstat.py  -i [input_pin] -b [brightness 1-255] -l [led_count]
 ```
 
-All arguements are optional, defaults are sourced from config.yml
+All arguments are optional, defaults are sourced from config.yml
 
 #### Examples
 
 ```sh
-$ sudo python npstat -i 18 -b 200 -l 12
+$ sudo python npstat.py -i 18 -b 200 -l 12
+```
+```sh
+$ sudo python npstat.py
+```
+```sh
+$ sudo python npstat.py --help
 ```
 
 
-### Arguements
+### Arguments
 
 | Argument	| Description	|
 |---------------|---------------|
-| -i		| Neopixel input pin|
-| -b		| Starting brightness|
-| -l		| Neopixel LED count|
+| -i _or_ --input| Neopixel input pin|
+| -b _or_ --brightness| Starting brightness|
+| -l _or_ --leds| Neopixel LED count|
+| -h _or_ --help| Display usage|
 
 
 ### Commands

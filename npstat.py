@@ -172,11 +172,12 @@ def main(argv):
   led_count = settings.config['lights']['count']
 
   try:
-    opts, args = getopt.getopt(sys.argv[1:], 'hi:b:l:',
+    opts, args = getopt.getopt(sys.argv[1:], 'hibl',
             ['help', 'input', 'brightness'])
     if not opts:
-      settings.usage()
-  except getopt.GetoptError:
+      settings.log('Using default values')
+  except getopt.GetoptError as e:
+    settings.log(e)
     settings.usage()
   for opt, arg, in opts:
     if opt in ('-h', '--help'):

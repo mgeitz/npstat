@@ -2,11 +2,20 @@
 
 ## NCurses Neopixel Status Indicator
 
-![NPStat][NPStat1]
-![NPStat][NPStat2]
+[NPStat_gif_1]: https://s3.amazonaws.com/mgeitz/npstat.gif
+[NPStat_img_1]: https://i.imgur.com/NKSv8hO.png
+[NPStat_img_2]: https://i.imgur.com/5JdSpmi.png
 
-[NPStat1]: https://i.imgur.com/NKSv8hO.png
-[NPStat2]: https://i.imgur.com/5JdSpmi.png
+Capture events to process as a neopixel color sequence.
+
+![NPStat][NPStat_gif_1]
+> A new local session event, shown as a blue color wipe
+
+![NPStat][NPStat_img_1]
+> NCurses Console
+
+![NPStat][NPStat_img_2]
+> NCurses Console Help
 
 ### Dependencies
 
